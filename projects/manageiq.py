@@ -79,7 +79,20 @@ def deploy():
 
     enable_tcp_ports([3000])
 
+
+@task
+def start_rails():
+    with cd('manageiq/vmdb'):
+        run('bin/rails server')
+
+
 @task
 def start():
     with cd('manageiq/vmdb'):
-        run('bin/rails server')
+        run('bundle exec rake evm:start')
+
+
+@task
+def stop():
+    with cd('manageiq/vmdb'):
+        run('bundle exec rake evm:kill')
