@@ -18,6 +18,9 @@
 # Refer to the README and COPYING files for full details of the license
 #
 
+import json
+import requests
+
 from fabric.api import cd
 from fabric.api import put
 from fabric.api import run
@@ -30,6 +33,10 @@ from fabric.contrib.files import sed
 from common import install_packages
 from common import enable_services
 from common import enable_tcp_ports
+
+
+DEFAULT_USER = 'admin'
+DEFAULT_PASS = 'smartvm'
 
 
 @task(name='install-deps')
@@ -102,3 +109,21 @@ def start():
 def stop():
     with cd('manageiq/vmdb'):
         run('bundle exec rake evm:kill')
+
+
+@task
+def create_provider(name, hostname, user=DEFAULT_USER, password=DEFAULT_PASS):
+    data = json.dumps({
+        "action": "create",
+        "resources": [
+            {
+                'name': name,
+                'type': 'EmsKubernetes',
+                'hostname': hostname,
+                'port': '8443'
+            }]
+    })
+
+    manageiq_url = 'http://{0}:3000/api/providers/'.format(hostname)
+    r = requests.post(manageiq_url, data, auth=(user, password))
+    print r.json

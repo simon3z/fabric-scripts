@@ -18,6 +18,8 @@
 # Refer to the README and COPYING files for full details of the license
 #
 
+from manageiq import create_provider
+
 from fabric.api import cd
 from fabric.api import put
 from fabric.api import run
@@ -35,20 +37,34 @@ from common import enable_tcp_ports
 @task(name='install-deps')
 def install_deps():
     install_packages([
-        'docker-io',
+        'docker',
+        'docker-registry',
         'git',
         'golang',
         'screen',
         'vim',
     ])
+    # required on CentOS7
+    sudo('yum -y update device-mapper')
 
 
 @task
-def deploy(proxy=''):
+def deploy():
     install_deps()
 
-    enable_services(['docker.socket'])
+    enable_services(['docker.service'])
     enable_tcp_ports([8443, 8444])
 
-    sudo('usermod -a -G docker {0}'.format(env.user))
+    sudo('usermod -aG root {0}'.format(env.user))
+
     run('test -d origin || git clone https://github.com/openshift/origin.git')
+
+
+@task
+def start():
+    with cd('origin'):
+        run('make')
+        sudo('nohup ./_output/local/go/bin/openshift start &')
+
+        # add OpenShift as a provider in ManageIQ
+        create_provider('openshift01', env.host)
