@@ -77,6 +77,12 @@ def deploy():
             'username: root', 'username: {0}'.format(env.user))
         run('bin/rake db:migrate')
 
+    # enables container management UI
+    with cd('manageiq/vmdb'):
+        run('grep -q "containers: true" config/vmdb.tmpl.yml || sed -i '
+            '"s/maindb: ExtManagementSystem/maindb: ExtManagementSystem\\n'
+            '  containers: true/" config/vmdb.tmpl.yml')
+
     enable_tcp_ports([3000])
 
 
