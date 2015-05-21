@@ -111,7 +111,7 @@ def stop():
         run('bundle exec rake evm:kill')
 
 
-@task
+@task(name='create-provider')
 def create_provider(name, hostname, user=DEFAULT_USER, password=DEFAULT_PASS):
     data = json.dumps({
         "action": "create",
@@ -126,4 +126,18 @@ def create_provider(name, hostname, user=DEFAULT_USER, password=DEFAULT_PASS):
 
     manageiq_url = 'http://{0}:3000/api/providers/'.format(hostname)
     r = requests.post(manageiq_url, data, auth=(user, password))
-    print r.json
+    print 'Create provider response status code: {0}'.format(r.status_code)
+
+    resp_body = json.loads(r.text)
+    return resp_body['results'][0]['id']
+
+
+@task(name='refresh-provider')
+def refresh_provider(id_, hostname, user=DEFAULT_USER, password=DEFAULT_PASS):
+    data = json.dumps({
+        "action": "refresh"
+        })
+
+    manageiq_url = 'http://{0}:3000/api/providers/{1}'.format(hostname, id_)
+    r = requests.post(manageiq_url, data, auth=(user, password))
+    print 'Refresh provider response status code: {0}'.format(r.status_code)

@@ -18,21 +18,28 @@
 # Refer to the README and COPYING files for full details of the license
 #
 
-from manageiq import create_provider
+import sys
+import time
 
 from fabric.api import cd
-from fabric.api import put
+from fabric.api import env
 from fabric.api import run
 from fabric.api import settings
 from fabric.api import sudo
 from fabric.api import task
-from fabric.api import env
-from fabric.contrib.files import sed
 
-from common import install_packages
 from common import enable_services
 from common import enable_tcp_ports
+from common import install_packages
+from manageiq import create_provider
+from manageiq import refresh_provider
 
+
+DEFAULT_ATTEMPTS = 10
+OPENSHIFT = './_output/local/go/bin/openshift'
+MASTER_YAML_FILE = 'openshift.local.config/master-config.yaml'
+ADMIN_KUBECONFIG_FILE = 'openshift.local.config/admin.kubeconfig'
+PROVIDER_NAME = 'openshift01'
 
 @task(name='install-deps')
 def install_deps():
@@ -61,10 +68,57 @@ def deploy():
 
 
 @task
-def start():
+def build():
     with cd('origin'):
-        run('make')
-        sudo('nohup ./_output/local/go/bin/openshift start &')
+        run('make clean build')
 
-        # add OpenShift as a provider in ManageIQ
-        create_provider('openshift01', env.host)
+
+@task
+def start():
+    build()
+
+    with cd('origin'):
+        run('test -e {0} || {1} start master '
+            '--write-config=openshift.local.config'.
+            format(MASTER_YAML_FILE, OPENSHIFT))
+
+        run('mkdir -p ~/.config/openshift/')
+        run('cp {0} ~/.config/openshift/config'.format(ADMIN_KUBECONFIG_FILE))
+
+        # used the sleep workaround due to fabric issue #395
+        sudo('nohup {0} start master --config={1} & sleep 5; exit 0'.
+             format(OPENSHIFT, MASTER_YAML_FILE))
+
+        with settings(warn_only=True):
+            attempts = 0
+            while attempts < DEFAULT_ATTEMPTS:
+                if run('{0} cli get nodes'.format(OPENSHIFT)):
+                    break
+                else:
+                    attempts += 1
+                    time.sleep(5)
+
+        if attempts == DEFAULT_ATTEMPTS:
+            sys.exit('failed to start OpenShift after {0} attempts'.format(
+                attempts))
+
+    with cd('origin'):
+        # workaround for ManageIQ authentication
+        run('{0} admin policy add-role-to-group cluster-admin '
+            'system:authenticated system:unauthenticated '
+            '--namespace=master'.format(OPENSHIFT))
+
+
+@task(name='create-example-app')
+def create_example_app():
+    """creates an example app: "hello-openshift"""
+    with cd('origin'):
+        run('{0} cli create -f '
+            'examples/hello-openshift/hello-pod.json'.format(OPENSHIFT))
+
+
+@task(name='create-provider')
+def create_openshit_provider():
+    """add OpenShift as a provider in ManageIQ"""
+    provider_id = create_provider(PROVIDER_NAME, env.host)
+    refresh_provider(provider_id, env.host)
