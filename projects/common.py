@@ -22,15 +22,24 @@ from fabric.api import sudo
 from fabric.context_managers import shell_env
 
 
-def install_packages(packages, proxy=''):
+def install_packages(packages):
+    yum_command('install', packages)
+
+
+def update_packages(packages):
+    yum_command('update', packages)
+
+
+def yum_command(command, packages, proxy=''):
     with shell_env(http_proxy=proxy, ftp_proxy=proxy):
-        sudo('yum -y install {0}'.format(' '.join(packages)), pty=False)
+        sudo('yum -y {0} {1}'.format(command, ' '.join(packages)), pty=False)
 
 
 def enable_services(services):
     for x in services:
         sudo('sudo systemctl enable {0}'.format(x))
         sudo('sudo systemctl start {0}'.format(x))
+
 
 def enable_tcp_ports(ports):
     for x in ports:
